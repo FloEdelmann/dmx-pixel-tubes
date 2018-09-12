@@ -1,0 +1,6 @@
+{
+    "board": "esp32:esp32:lolin32",
+    "configuration": "FlashFreq=80,PartitionScheme=default,UploadSpeed=460800",
+    "port": "/dev/ttyUSB0",
+    "sketch": "arduino/dmx-pixel-tubes.ino"
+}

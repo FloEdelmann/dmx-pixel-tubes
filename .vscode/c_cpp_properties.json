@@ -1,0 +1,20 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "/home/flo/.arduino15/packages/esp32/tools/**",
+                "/home/flo/.arduino15/packages/esp32/hardware/esp32/1.0.0/**",
+                "${workspaceFolder}/**",
+                "/opt/arduino-1.8.6/**"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "clang-x64",
+            "forcedInclude": []
+        }
+    ],
+    "version": 4
+}
