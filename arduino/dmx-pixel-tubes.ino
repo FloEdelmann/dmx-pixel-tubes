@@ -1,11 +1,12 @@
-#include <WiFi.h>
-#include <WiFiUdp.h>
+#include <Basecamp.hpp>
 #include <ArtnetWifi.h>
 #include <FastLED.h>
 
 // Wifi settings
-#define SSID "ssid"
-#define PASSPHRASE "passphrase"
+Basecamp iot{
+  Basecamp::SetupModeWifiEncryption::secured,
+  Basecamp::ConfigurationUI::always
+};
 
 // FastLED settings
 #define NUM_LEDS 30
@@ -20,45 +21,6 @@ CRGB leds[NUM_LEDS];
 
 ArtnetWifi artnet;
 
-
-
-// connect to wifi – returns true if successful or false if not
-boolean ConnectWifi(void) {
-  WiFi.begin(SSID, PASSPHRASE);
-  Serial.println("");
-  Serial.println("Connecting to WiFi");
-
-  // Wait for connection
-  Serial.print("Connecting");
-
-  boolean state = true;
-  int i = 0;
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-
-    if (i > 20) {
-      state = false;
-      break;
-    }
-    i++;
-  }
-
-  if (state) {
-    Serial.println("");
-    Serial.print("Connected to ");
-    Serial.println(SSID);
-    Serial.print("IP address: ");
-    Serial.println(WiFi.localIP());
-  }
-  else {
-    Serial.println("");
-    Serial.println("Connection failed.");
-  }
-
-  return state;
-}
 
 
 void initTest() {
@@ -105,19 +67,15 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
   FastLED.show();
 }
 
-
 void setup() {
-  Serial.begin(115200);
-
   FastLED.addLeds<WS2812B, DATA_PIN, GRB>(leds, NUM_LEDS);
   initTest();
 
-  ConnectWifi();
+  iot.begin("LEDs4TheWin!");
   artnet.begin();
 
   artnet.setArtDmxCallback(onDmxFrame);
 }
-
 
 void loop() {
   artnet.read();
