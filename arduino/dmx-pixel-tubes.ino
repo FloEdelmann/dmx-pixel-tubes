@@ -40,6 +40,18 @@ void initTest() {
   FastLED.show();
 }
 
+ColorTemperature getColorTemperatureFromDmxValue(uint8_t dmxValue) {
+  if (dmxValue <= 29) return UncorrectedTemperature; // 0...29: default
+  if (dmxValue <= 54) return Candle; // 30...54: 1900K
+  if (dmxValue <= 79) return Tungsten40W; // 55...79: 2600K
+  if (dmxValue <= 104) return Tungsten100W; // 80...104: 2850K
+  if (dmxValue <= 129) return Halogen; // 105...129: 3200K
+  if (dmxValue <= 154) return CarbonArc; // 130...154: 5200K
+  if (dmxValue <= 179) return HighNoonSun; // 155...179: 5400K
+  if (dmxValue <= 204) return DirectSunlight; // 180...204: 6000K
+  if (dmxValue <= 229) return OvercastSky; // 205...229: 7000K
+  return ClearBlueSky; // 230...255: 20000K
+}
 
 void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* data) {
   if (universe != ART_NET_UNIVERSE) {
@@ -52,6 +64,10 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
   }
 
   // DMX channel 2: Color Temperature
+  if (length >= 2) {
+    FastLED.setTemperature(getColorTemperatureFromDmxValue(data[1]));
+  }
+
   // DMX channel 3: Color Macros
   // DMX channel 4: Auto Programs
   // DMX channel 5: RGB / HSV selection & reversing pixel order
