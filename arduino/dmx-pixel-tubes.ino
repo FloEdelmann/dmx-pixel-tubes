@@ -24,43 +24,44 @@ ArtnetWifi artnet;
 
 
 void initTest() {
-  for (int i = 0; i < NUM_LEDS; i++) {
-    leds[i].setRGB(255, 0, 0);
-  }
+  fill_solid(leds, NUM_LEDS, CRGB(255, 0, 0));
   FastLED.show();
   delay(500);
 
-  for (int i = 0; i < NUM_LEDS; i++) {
-    leds[i].setRGB(0, 255, 0);
-  }
+  fill_solid(leds, NUM_LEDS, CRGB(0, 255, 0));
   FastLED.show();
   delay(500);
 
-  for (int i = 0; i < NUM_LEDS; i++) {
-    leds[i].setRGB(0, 0, 255);
-  }
+  fill_solid(leds, NUM_LEDS, CRGB(0, 0, 255));
   FastLED.show();
   delay(500);
 
-  for (int i = 0; i < NUM_LEDS; i++) {
-    leds[i].setRGB(0, 0, 0);
-  }
+  fill_solid(leds, NUM_LEDS, CRGB(0, 0, 0));
   FastLED.show();
 }
 
 
 void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* data) {
-  Serial.printf("Frame received: Universe %d, length %d, sequence %d\n", universe, length, sequence);
-
   if (universe != ART_NET_UNIVERSE) {
     return;
   }
 
-  // read universe and put into the right part of the display buffer
-  for (int i = 0; i < length; i += 3) {
-    int led = i / 3;
+  // DMX channel 1: Dimmer
+  if (length >= 1) {
+    FastLED.setBrightness(data[0]);
+  }
+
+  // DMX channel 2: Color Temperature
+  // DMX channel 3: Color Macros
+  // DMX channel 4: Auto Programs
+  // DMX channel 5: RGB / HSV selection & reversing pixel order
+
+  // DMX channels 6...125: single pixel
+  for (int i = 5; (i + 3) < length; i += 4) {
+    int led = (i - 5) / 4;
     if (led < NUM_LEDS) {
-      leds[led].setRGB(data[i], data[i + 1], data[i + 2]);
+      leds[led].setRGB(data[i + 1], data[i + 2], data[i + 3]);
+      leds[led].nscale8(data[i]);
     }
   }
 
@@ -68,7 +69,7 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
 }
 
 void setup() {
-  FastLED.addLeds<WS2812B, DATA_PIN, GRB>(leds, NUM_LEDS);
+  FastLED.addLeds<WS2812B, DATA_PIN, GRB>(leds, NUM_LEDS).setCorrection(TypicalSMD5050);
   initTest();
 
   iot.begin("LEDs4TheWin!");
