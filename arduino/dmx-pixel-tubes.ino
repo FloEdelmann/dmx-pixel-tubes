@@ -14,6 +14,12 @@ Basecamp iot{
 
 CRGB leds[NUM_LEDS];
 
+// ESP32-to-ESP32 communication settings
+#define RX_PIN 14
+#define TX_PIN 19
+
+uint8_t pixelTubeNumber;
+
 // Art-Net settings
 // some lighting programs send out first Art-Net universe as 0, most as 1
 #define ART_NET_UNIVERSE 0
@@ -21,6 +27,43 @@ CRGB leds[NUM_LEDS];
 
 ArtnetWifi artnet;
 
+
+
+uint8_t getPixelTubeNumber() {
+  int lastReceived = -1;
+  uint8_t repeatCount = 1; // how often the same number was received;
+
+  unsigned long start = millis();
+  unsigned long now = start;
+
+  while (now - start < 10000) {
+    if (Serial1.available()) {
+      // previous ESP32 has sent their Pixel Tube number
+
+      int received = Serial1.read();
+      Serial.printf("Received %d.\n", received);
+      if (lastReceived == received) {
+        repeatCount++;
+
+        if (repeatCount == 10) {
+          return received + 1;
+        }
+      }
+      else {
+        lastReceived = received;
+        repeatCount = 1;
+      }
+    }
+
+    delay(10);
+    now = millis();
+  }
+
+  // nothing received in 7 seconds, so this seems to be the first in this line
+  // NOTE: The first Pixel Tube usually receives multiple zeros from the open
+  //       connection, so this is just a fallback
+  return 1;
+}
 
 
 void initTest() {
@@ -238,7 +281,25 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
 
 
 void setup() {
+  Serial.begin(115200); // for USB communication
+  Serial1.begin(600, SERIAL_5E2, RX_PIN, TX_PIN); // for ESP32-to-ESP32 communication
+
   FastLED.addLeds<WS2812B, LED_PIN, GRB>(leds, NUM_LEDS).setCorrection(TypicalSMD5050);
+
+  // reset any leftover LED assignments from before the reboot
+  fill_solid(leds, NUM_LEDS, CRGB(0, 0, 0));
+
+  Serial.println("Booting up, trying to find out pixel tube number in line...");
+  pixelTubeNumber = getPixelTubeNumber();
+  Serial.printf("I am pixel tube number %d.\n", pixelTubeNumber);
+
+  // only 6 Pixel Tubes are allowed in one line
+  if (pixelTubeNumber > 6) {
+    // TODO: changeState(tooManyPixelTubesInLine);
+    pixelTubeNumber = 99;
+    return;
+  }
+
   initTest();
 
   iot.begin("LEDs4TheWin!");
@@ -248,5 +309,6 @@ void setup() {
 }
 
 void loop() {
+  Serial1.write(pixelTubeNumber);
   artnet.read();
 }
