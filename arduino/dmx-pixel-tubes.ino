@@ -10,7 +10,7 @@ Basecamp iot{
 
 // FastLED settings
 #define NUM_LEDS 30
-#define DATA_PIN 5
+#define LED_PIN 5
 
 CRGB leds[NUM_LEDS];
 
@@ -40,6 +40,7 @@ void initTest() {
   FastLED.show();
 }
 
+
 ColorTemperature getColorTemperatureFromDmxValue(uint8_t dmxValue) {
   if (dmxValue <= 29) return UncorrectedTemperature; // 0...29: default
   if (dmxValue <= 54) return Candle; // 30...54: 1900K
@@ -52,6 +53,7 @@ ColorTemperature getColorTemperatureFromDmxValue(uint8_t dmxValue) {
   if (dmxValue <= 229) return OvercastSky; // 205...229: 7000K
   return ClearBlueSky; // 230...255: 20000K
 }
+
 
 CRGB getColorMacroFromDmxValue(uint8_t dmxValue) {
   if (dmxValue == 116) return CRGB::Black;
@@ -196,6 +198,7 @@ CRGB getColorMacroFromDmxValue(uint8_t dmxValue) {
   if (dmxValue == 255) return CRGB::White;
 }
 
+
 void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* data) {
   if (universe != ART_NET_UNIVERSE) {
     return;
@@ -233,8 +236,9 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
   FastLED.show();
 }
 
+
 void setup() {
-  FastLED.addLeds<WS2812B, DATA_PIN, GRB>(leds, NUM_LEDS).setCorrection(TypicalSMD5050);
+  FastLED.addLeds<WS2812B, LED_PIN, GRB>(leds, NUM_LEDS).setCorrection(TypicalSMD5050);
   initTest();
 
   iot.begin("LEDs4TheWin!");
