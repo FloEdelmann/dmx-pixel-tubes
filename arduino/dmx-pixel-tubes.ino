@@ -26,6 +26,17 @@ uint8_t pixelTubeNumber;
 #define MAX_CHANNELS NUM_LEDS * 3
 
 ArtnetWifi artnet;
+unsigned long lastArtNetPacketTime = 0;
+
+typedef enum {
+  tooManyPixelTubesInLine,
+  unconfigured,
+  noWiFi,
+  noArtNet,
+  receiving
+} PixelTubeState;
+
+PixelTubeState currentState;
 
 
 
@@ -80,6 +91,29 @@ void initTest() {
   delay(500);
 
   fill_solid(leds, NUM_LEDS, CRGB(0, 0, 0));
+  FastLED.show();
+}
+
+
+void changeState(PixelTubeState newState) {
+  currentState = newState;
+
+  // reset all LEDs to off
+  fill_solid(leds, NUM_LEDS, CRGB(0, 0, 0));
+  FastLED.show();
+}
+
+
+void showError(uint8_t red, uint8_t green, uint8_t blue) {
+  // switch first LED red on and off roughly every 500ms
+  if ((millis() % 1000) < 500) {
+    leds[0].setRGB(255, 0, 0);
+  }
+  else {
+    leds[0].setRGB(0, 0, 0);
+  }
+
+  leds[1].setRGB(red, green, blue);
   FastLED.show();
 }
 
@@ -247,6 +281,10 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
     return;
   }
 
+  // don't call changeState(receiving) because we don't want it to set the LEDs
+  currentState = receiving;
+  lastArtNetPacketTime = millis();
+
   // DMX channel 1: Dimmer
   if (length >= 1) {
     FastLED.setBrightness(data[0]);
@@ -295,20 +333,79 @@ void setup() {
 
   // only 6 Pixel Tubes are allowed in one line
   if (pixelTubeNumber > 6) {
-    // TODO: changeState(tooManyPixelTubesInLine);
+    changeState(tooManyPixelTubesInLine);
     pixelTubeNumber = 99;
     return;
   }
 
   initTest();
-
   iot.begin("LEDs4TheWin!");
-  artnet.begin();
 
-  artnet.setArtDmxCallback(onDmxFrame);
+  if (iot.wifi.getOperationMode() != WifiControl::Mode::client) {
+    changeState(unconfigured);
+  }
+  else {
+    changeState(noWiFi);
+
+    WifiControl::onConnectCallback = []() {
+      changeState(noArtNet);
+    };
+
+    WifiControl::onDisconnectCallback = []() {
+      if (currentState == noArtNet) {
+        // directly change back to noWiFi
+        changeState(noWiFi);
+      }
+
+      // if we are in receiving state, the state change to noWiFi will be
+      // initiated after one minute by the timer, so don't do anything here
+    };
+
+    artnet.setArtDmxCallback(onDmxFrame);
+    artnet.begin();
+  }
 }
+
+
+uint16_t artNetReturnCode;
 
 void loop() {
   Serial1.write(pixelTubeNumber);
-  artnet.read();
+
+  switch (currentState) {
+    case receiving:
+      artNetReturnCode = artnet.read();
+
+      if (artNetReturnCode != 0) {
+        // valid Art-Net packet
+        return;
+      }
+
+      if (millis() - lastArtNetPacketTime > 60000) {
+        if (iot.wifi.status() == WL_CONNECTED) {
+          changeState(noArtNet);
+        }
+        else {
+          changeState(noWiFi);
+        }
+      }
+      return;
+
+    case tooManyPixelTubesInLine:
+      showError(255, 0, 0);
+      return;
+
+    case unconfigured:
+      showError(255, 255, 255);
+      return;
+
+    case noWiFi:
+      showError(0, 255, 0);
+      return;
+
+    case noArtNet:
+      showError(0, 0, 255);
+      artnet.read(); // try to read an Art-Net packet anyway
+      return;
+  }
 }
