@@ -151,18 +151,39 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
     FastLED.setTemperature(getColorTemperatureFromDmxValue(data[1]));
   }
 
-  // TODO: implement these:
+  bool isReversed = false;
+  bool isHsv = false;
+
   // DMX channel 3: Pixel Control
+  if (length >= 3) {
+    isReversed = data[2] >= 128;
+    isHsv = (data[2] >= 64 && data[2] <= 127) || (data[2] >= 192);
+  }
+
+  // TODO: implement these:
   // DMX channel 4: Auto Programs
   // DMX channel 5: Program Speed
 
   // DMX channels 6...125: single pixel
   for (int i = 5; (i + 3) < length; i += 4) {
-    int led = (i - 5) / 4;
-    if (led < NUM_LEDS) {
-      leds[led].setRGB(data[i + 1], data[i + 2], data[i + 3]);
-      leds[led].nscale8(data[i]);
+    int ledIndex = (i - 5) / 4;
+    if (ledIndex >= NUM_LEDS) {
+      break;
     }
+
+    if (isReversed) {
+      ledIndex = NUM_LEDS - ledIndex - 1;
+    }
+
+    if (isHsv) {
+      leds[ledIndex].setHSV(data[i + 1], data[i + 2], data[i + 3]);
+    }
+    else {
+      leds[ledIndex].setRGB(data[i + 1], data[i + 2], data[i + 3]);
+    }
+
+    // brightness
+    leds[ledIndex].nscale8(data[i]);
   }
 
   FastLED.show();
