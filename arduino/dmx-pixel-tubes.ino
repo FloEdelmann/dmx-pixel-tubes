@@ -1,12 +1,6 @@
 #include <Basecamp.hpp>
 #include <ArtnetWifi.h>
 #include <FastLED.h>
-
-// fix VSCode C/C++ IntelliSense
-#ifndef ARDUINO
-#define ARDUINO 100
-#endif
-
 #include <WS2812FX.h>
 
 // Wifi settings

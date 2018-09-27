@@ -8,7 +8,9 @@
                 "${workspaceFolder}/**",
                 "/opt/arduino-1.8.6/**"
             ],
-            "defines": [],
+            "defines": [
+                "ARDUINO=100"
+            ],
             "compilerPath": "/usr/bin/gcc",
             "cStandard": "c11",
             "cppStandard": "c++17",
