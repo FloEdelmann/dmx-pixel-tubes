@@ -23,8 +23,10 @@ CRGB leds[NUM_LEDS];
 
 // WS2812FX settings
 #define WS2812FX_FAKE_LED_PIN 4
+#define NUM_EFFECT_COLORS 3
 
 WS2812FX ws2812fx = WS2812FX(NUM_LEDS, WS2812FX_FAKE_LED_PIN, NEO_RGB);
+CRGB effectColors[NUM_EFFECT_COLORS];
 
 // ESP32-to-ESP32 communication settings
 #define RX_PIN 14
@@ -251,11 +253,6 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
       uint8_t mode = getEffectModeFromDmxValue(data[3]);
       if (ws2812fx.getMode() != mode) {
         ws2812fx.setMode(mode);
-
-        // TODO: make effect colors adjustable
-        ws2812fx.getSegment()->colors[0] = RED;
-        ws2812fx.getSegment()->colors[1] = GREEN;
-        ws2812fx.getSegment()->colors[2] = BLUE;
       }
     }
     else {
@@ -273,22 +270,47 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
       break;
     }
 
-    if (isReversed) {
-      ledIndex = NUM_LEDS - ledIndex - 1;
+    CRGB *pixel;
+
+    if (isEffectEnabled) {
+      if (ledIndex >= NUM_EFFECT_COLORS) {
+        break;
+      }
+
+      pixel = &effectColors[ledIndex];
+    }
+    else if (isReversed) {
+      pixel = &leds[NUM_LEDS - ledIndex - 1];
+    }
+    else {
+      pixel = &leds[ledIndex];
     }
 
     if (isHsv) {
-      leds[ledIndex].setHSV(data[i + 1], data[i + 2], data[i + 3]);
+      pixel->setHSV(data[i + 1], data[i + 2], data[i + 3]);
     }
     else {
-      leds[ledIndex].setRGB(data[i + 1], data[i + 2], data[i + 3]);
+      pixel->setRGB(data[i + 1], data[i + 2], data[i + 3]);
     }
 
     // brightness
-    leds[ledIndex].nscale8(data[i]);
+    pixel->nscale8(data[i]);
   }
 
-  if (!isEffectEnabled) {
+  if (isEffectEnabled) {
+    bool effectColorsChanged = false;
+    uint32_t *segmentColors = ws2812fx.getSegment()->colors;
+
+    for (int i = 0; i < NUM_EFFECT_COLORS; i++) {
+      uint32_t newColor = ((uint32_t)effectColors[i].r << 16) | ((uint32_t)effectColors[i].g << 8) | (effectColors[i].b);
+
+      if (newColor != segmentColors[i]) {
+        effectColorsChanged = true;
+        segmentColors[i] = newColor;
+      }
+    }
+  }
+  else {
     FastLED.show();
   }
 }
