@@ -2,3 +2,7 @@
 	path = arduino/Basecamp
 	url = https://github.com/FloEdelmann/Basecamp
 	branch = pixel-tubes
+[submodule "arduino/WS2812FX"]
+	path = arduino/WS2812FX
+	url = https://github.com/FloEdelmann/WS2812FX.git
+	branch = pixel-tubes

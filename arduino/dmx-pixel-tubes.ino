@@ -20,6 +20,7 @@ CRGB leds[NUM_LEDS];
 #define NUM_EFFECT_COLORS 3
 
 WS2812FX ws2812fx = WS2812FX(NUM_LEDS, WS2812FX_FAKE_LED_PIN, NEO_RGB);
+WS2812FX::Segment *effectSegment;
 CRGB effectColors[NUM_EFFECT_COLORS];
 
 // ESP32-to-ESP32 communication settings
@@ -133,7 +134,6 @@ void showError(uint8_t red, uint8_t green, uint8_t blue) {
 void ws2812fxShowFunction() {
   if (isEffectEnabled) {
     memcpy(leds, ws2812fx.getPixels(), NUM_LEDS * 3);
-    FastLED.show();
   }
 }
 
@@ -236,28 +236,59 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
   if (length >= 3) {
     isReversed = data[2] >= 128;
     isHsv = (data[2] >= 64 && data[2] <= 127) || (data[2] >= 192);
-    ws2812fx.getSegment()->options = isReversed ? REVERSE : NO_OPTIONS;
+
+    uint8_t effectOptions = isReversed ? REVERSE : NO_OPTIONS;
+    if (effectSegment->options != effectOptions) {
+      effectSegment->options = effectOptions;
+      ws2812fx.trigger();
+    }
   }
 
   // DMX channel 4: Auto Programs
   if (length >= 4) {
     if (data[3] >= 10) {
-      isEffectEnabled = true;
-
       uint8_t mode = getEffectModeFromDmxValue(data[3]);
       if (ws2812fx.getMode() != mode) {
         ws2812fx.setMode(mode);
+        ws2812fx.trigger();
       }
+      else if (!isEffectEnabled) {
+        ws2812fx.trigger();
+      }
+
+      isEffectEnabled = true;
     }
     else {
       isEffectEnabled = false;
+      ws2812fx.pause();
     }
   }
 
-  // TODO: implement this:
   // DMX channel 5: Program Speed
+  if (length >= 5) {
+    if (data[4] <= 9) {
+      if (ws2812fx.isRunning()) {
+        ws2812fx.pause();
+      }
+    }
+    else if (isEffectEnabled) {
+      if (!ws2812fx.isRunning()) {
+        ws2812fx.resume();
+      }
 
-  // DMX channels 6...125: single pixel
+      // (266 - dmxValue)^3 / 256 - 3
+      // see https://www.wolframalpha.com/input/?i=plot+((266+-+x)%5E3+%2F+256+-+3)+from+x%3D10+to+255
+      // and https://www.wolframalpha.com/input/?i=(Quotient%5B(266+-+x)%5E3,+256%5D+-+3)+from+x%3D10+to+255
+      uint16_t speed = (266L - data[4]) * (266L - data[4]) * (266L - data[4]) / 256L - 3L;
+      if (ws2812fx.getSpeed() != speed) {
+        // set speed directly (instead of calling ws2812fx.setSpeed) to avoid resetting
+        effectSegment->speed = speed;
+        ws2812fx.trigger();
+      }
+    }
+  }
+
+  // DMX channels 6...125: single pixels or effect colors
   for (int i = 5; (i + 3) < length; i += 4) {
     int ledIndex = (i - 5) / 4;
     if (ledIndex >= NUM_LEDS) {
@@ -292,20 +323,10 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
   }
 
   if (isEffectEnabled) {
-    bool effectColorsChanged = false;
-    uint32_t *segmentColors = ws2812fx.getSegment()->colors;
-
     for (int i = 0; i < NUM_EFFECT_COLORS; i++) {
       uint32_t newColor = ((uint32_t)effectColors[i].r << 16) | ((uint32_t)effectColors[i].g << 8) | (effectColors[i].b);
-
-      if (newColor != segmentColors[i]) {
-        effectColorsChanged = true;
-        segmentColors[i] = newColor;
-      }
+      effectSegment->colors[i] = newColor;
     }
-  }
-  else {
-    FastLED.show();
   }
 }
 
@@ -355,8 +376,10 @@ void setup() {
 
     ws2812fx.init();
     ws2812fx.setCustomShow(ws2812fxShowFunction);
+    effectSegment = ws2812fx.getSegment();
     ws2812fx.setBrightness(255);
     ws2812fx.start();
+    ws2812fx.pause();
 
     artnet.setArtDmxCallback(onDmxFrame);
     artnet.begin();
@@ -373,6 +396,7 @@ void loop() {
     case receiving:
       artNetReturnCode = artnet.read();
       ws2812fx.service();
+      FastLED.show();
 
       if (artNetReturnCode != 0) {
         // valid Art-Net packet
@@ -404,6 +428,7 @@ void loop() {
     case noArtNet:
       showError(0, 0, 255);
       artnet.read(); // try to read an Art-Net packet anyway
+      FastLED.show();
       return;
   }
 }
