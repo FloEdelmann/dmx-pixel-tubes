@@ -362,6 +362,15 @@ void setup() {
 
     WifiControl::onConnectCallback = []() {
       changeState(noArtNet);
+
+      IPAddress nodeIp = iot.wifi.getIP();
+      IPAddress subnetMask = iot.wifi.subnetMask();
+      IPAddress broadcastIp = IPAddress(nodeIp | ~subnetMask);
+
+      String shortName = "PixTube" + String(iot.pixelTubeNumber);
+      String longName = "Gruft Pixel Tube " + String(iot.pixelTubeNumber);
+
+      artnet.setArtPollReplyInformation(nodeIp, broadcastIp, shortName, longName);
     };
 
     WifiControl::onDisconnectCallback = []() {

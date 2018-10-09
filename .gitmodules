@@ -6,3 +6,7 @@
 	path = arduino/WS2812FX
 	url = https://github.com/FloEdelmann/WS2812FX.git
 	branch = pixel-tubes
+[submodule "arduino/ArtnetWifi"]
+	path = arduino/ArtnetWifi
+	url = https://github.com/FloEdelmann/ArtnetWifi.git
+	branch = pixel-tubes
