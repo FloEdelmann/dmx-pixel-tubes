@@ -27,12 +27,13 @@ CRGB effectColors[NUM_EFFECT_COLORS];
 #define RX_PIN 14
 #define TX_PIN 19
 
-uint8_t pixelTubeNumber;
+uint8_t pixelTubeNumberInLine;
 
 // Art-Net settings
 // some lighting programs send out first Art-Net universe as 0, most as 1
-#define ART_NET_UNIVERSE 0
 #define MAX_CHANNELS NUM_LEDS * 3
+uint16_t artNetUniverse;
+uint16_t artNetStartAddress;
 
 ArtnetWifi artnet;
 unsigned long lastArtNetPacketTime = 0;
@@ -48,12 +49,12 @@ typedef enum {
 // state variables
 PixelTubeState currentState;
 bool isEffectEnabled = false;
-bool isReversed = false;
+bool isReversed = true;
 bool isHsv = false;
 
 
 
-uint8_t getPixelTubeNumber() {
+uint8_t getPixelTubeNumberInLine() {
   int lastReceived = -1;
   uint8_t repeatCount = 1; // how often the same number was received;
 
@@ -120,13 +121,13 @@ void changeState(PixelTubeState newState) {
 void showError(uint8_t red, uint8_t green, uint8_t blue) {
   // switch first LED red on and off roughly every 500ms
   if ((millis() % 1000) < 500) {
-    leds[0].setRGB(255, 0, 0);
+    leds[NUM_LEDS - 1].setRGB(255, 0, 0);
   }
   else {
-    leds[0].setRGB(0, 0, 0);
+    leds[NUM_LEDS - 1].setRGB(0, 0, 0);
   }
 
-  leds[1].setRGB(red, green, blue);
+  leds[NUM_LEDS - 2].setRGB(red, green, blue);
   FastLED.show();
 }
 
@@ -214,7 +215,7 @@ uint8_t getEffectModeFromDmxValue(uint8_t dmxValue) {
 
 
 void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* data) {
-  if (universe != ART_NET_UNIVERSE) {
+  if (universe != artNetUniverse) {
     return;
   }
 
@@ -223,19 +224,19 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
   lastArtNetPacketTime = millis();
 
   // DMX channel 1: Dimmer
-  if (length >= 1) {
-    FastLED.setBrightness(data[0]);
+  if (length > artNetStartAddress) {
+    FastLED.setBrightness(data[artNetStartAddress]);
   }
 
   // DMX channel 2: Color Temperature
-  if (length >= 2) {
-    FastLED.setTemperature(getColorTemperatureFromDmxValue(data[1]));
+  if (length > artNetStartAddress + 1) {
+    FastLED.setTemperature(getColorTemperatureFromDmxValue(data[artNetStartAddress + 1]));
   }
 
   // DMX channel 3: Pixel Control
-  if (length >= 3) {
-    isReversed = data[2] >= 128;
-    isHsv = (data[2] >= 64 && data[2] <= 127) || (data[2] >= 192);
+  if (length > artNetStartAddress + 2) {
+    isReversed = data[artNetStartAddress + 2] < 128;
+    isHsv = (data[artNetStartAddress + 2] >= 64 && data[artNetStartAddress + 2] <= 127) || (data[artNetStartAddress + 2] >= 192);
 
     uint8_t effectOptions = isReversed ? REVERSE : NO_OPTIONS;
     if (effectSegment->options != effectOptions) {
@@ -245,9 +246,9 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
   }
 
   // DMX channel 4: Auto Programs
-  if (length >= 4) {
-    if (data[3] >= 10) {
-      uint8_t mode = getEffectModeFromDmxValue(data[3]);
+  if (length > artNetStartAddress + 3) {
+    if (data[artNetStartAddress + 3] >= 10) {
+      uint8_t mode = getEffectModeFromDmxValue(data[artNetStartAddress + 3]);
       if (ws2812fx.getMode() != mode) {
         ws2812fx.setMode(mode);
         ws2812fx.trigger();
@@ -265,8 +266,8 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
   }
 
   // DMX channel 5: Program Speed
-  if (length >= 5) {
-    if (data[4] <= 9) {
+  if (length > artNetStartAddress + 4) {
+    if (data[artNetStartAddress + 4] > 245) {
       if (ws2812fx.isRunning()) {
         ws2812fx.pause();
       }
@@ -276,10 +277,10 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
         ws2812fx.resume();
       }
 
-      // (266 - dmxValue)^3 / 256 - 3
-      // see https://www.wolframalpha.com/input/?i=plot+((266+-+x)%5E3+%2F+256+-+3)+from+x%3D10+to+255
-      // and https://www.wolframalpha.com/input/?i=(Quotient%5B(266+-+x)%5E3,+256%5D+-+3)+from+x%3D10+to+255
-      uint16_t speed = (266L - data[4]) * (266L - data[4]) * (266L - data[4]) / 256L - 3L;
+      // (dmxValue + 10)^3 / 256 - 1
+      // see https://www.wolframalpha.com/input/?i=plot+((x+%2B+10)%5E3+%2F+256+-+3)+from+x%3D0+to+245
+      // and https://www.wolframalpha.com/input/?i=table+(Quotient%5B(x+%2B+10)%5E3,+256%5D+-+1)+from+x%3D0+to+245
+      uint16_t speed = (data[artNetStartAddress + 4] + 10) * (data[artNetStartAddress + 4] + 10) * (data[artNetStartAddress + 4] + 10) / 256L - 1L;
       if (ws2812fx.getSpeed() != speed) {
         // set speed directly (instead of calling ws2812fx.setSpeed) to avoid resetting
         effectSegment->speed = speed;
@@ -312,14 +313,14 @@ void onDmxFrame(uint16_t universe, uint16_t length, uint8_t sequence, uint8_t* d
     }
 
     if (isHsv) {
-      pixel->setHSV(data[i + 1], data[i + 2], data[i + 3]);
+      pixel->setHSV(data[artNetStartAddress + i + 1], data[artNetStartAddress + i + 2], data[artNetStartAddress + i + 3]);
     }
     else {
-      pixel->setRGB(data[i + 1], data[i + 2], data[i + 3]);
+      pixel->setRGB(data[artNetStartAddress + i + 1], data[artNetStartAddress + i + 2], data[artNetStartAddress + i + 3]);
     }
 
     // brightness
-    pixel->nscale8(data[i]);
+    pixel->nscale8(255 - data[artNetStartAddress + i]);
   }
 
   if (isEffectEnabled) {
@@ -340,16 +341,16 @@ void setup() {
   // reset any leftover LED assignments from before the reboot
   fill_solid(leds, NUM_LEDS, CRGB(0, 0, 0));
 
-  Serial.println("Booting up, trying to find out pixel tube number in line...");
-  pixelTubeNumber = getPixelTubeNumber();
-  Serial.printf("I am pixel tube number %d.\n", pixelTubeNumber);
+  /* Serial.println("Booting up, trying to find out pixel tube number in line...");
+  pixelTubeNumberInLine = getPixelTubeNumberInLine();
+  Serial.printf("I am pixel tube number %d in line.\n", pixelTubeNumberInLine);
 
   // only 6 Pixel Tubes are allowed in one line
-  if (pixelTubeNumber > 6) {
+  if (pixelTubeNumberInLine > 6) {
     changeState(tooManyPixelTubesInLine);
-    pixelTubeNumber = 99;
+    pixelTubeNumberInLine = 99;
     return;
-  }
+  } */
 
   initTest();
   iot.begin("LEDs4TheWin!");
@@ -362,6 +363,9 @@ void setup() {
 
     WifiControl::onConnectCallback = []() {
       changeState(noArtNet);
+
+      artNetUniverse = iot.artNetUniverse;
+      artNetStartAddress = iot.artNetStartAddress - 1;
 
       IPAddress nodeIp = iot.wifi.getIP();
       IPAddress subnetMask = iot.wifi.subnetMask();
@@ -399,7 +403,7 @@ void setup() {
 uint16_t artNetReturnCode;
 
 void loop() {
-  Serial1.write(pixelTubeNumber);
+  // Serial1.write(pixelTubeNumberInLine);
 
   switch (currentState) {
     case receiving:

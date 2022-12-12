@@ -1,5 +1,20 @@
 {
   "cSpell.words": [
-    "crgb"
-  ]
+    "crgb",
+    "gruft"
+  ],
+  "files.associations": {
+    "*.proto": "c",
+    "*.bst": "latex",
+    "*.crd": "css",
+    "*.qml": "python",
+    "*.tmpl": "html",
+    "*.latex": "latex",
+    "*.tcc": "cpp",
+    "array": "cpp",
+    "functional": "cpp",
+    "istream": "cpp",
+    "tuple": "cpp",
+    "utility": "cpp"
+  }
 }
